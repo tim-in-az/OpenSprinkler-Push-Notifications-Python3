@@ -1,0 +1,42 @@
+#!/bin/sh
+ 
+#description: watchdog for ospi-notifications
+#processname: ospi-notifications-watchdog
+ 
+MYSERVICE_PID=`pidof /opt/pegasus2.11.0/bin/cimserver`
+ 
+check_ospi-notifications() {
+        if [ -z $MYSERVICE_PID ];then
+                sudo service ospi-notifications start
+        fi
+}
+ 
+check_ospi-notifications
+ 
+usage() {
+    echo "ospi-notifications-watchdog {start|stop|status}"
+    exit 0
+}
+ 
+case $1 in
+    start ) if [-z $MYSERVICE_PID ];then
+        sudo service ospi-notifications start
+        else
+            echo "ospi-notifications is already running"
+        fi
+        ;;
+    stop ) if [ -n $MYSERVICE_PID ];then
+        sudo service ospi-notifications stop
+        else
+            echo "ospi-notifications is already stopped"
+        fi
+        ;;
+    status) if [ -z $MYSERVICE_PID ];then
+            echo "ospi-notifications is not running"
+        else
+            echo "ospi-notifications is running"
+        fi
+        ;;
+    *) usage
+        ;;
+esac

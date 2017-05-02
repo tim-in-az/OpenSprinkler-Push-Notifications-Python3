@@ -6,25 +6,29 @@ programs:
     start: "yes"
     stop: "yes"
   messages: # Bracket the begin and end of a program
-    start: "Program started"
-    stop: "Program ended" 
+    start: "[OPEN SPRINKLER] Program started"
+    stop: "[OPEN SPRINKLER] Program ended" 
 stations: # Station activity notifications for start and stop. Valid options are "yes" or "no"
   notify:
     start: "yes"
     stop: "yes"
   messages: # Use {} as the place where the station name will be displayed
-    start: "{} is now active"
-    stop: "{} is now idle" 
+    start: "[OPEN SPRINKLER] {} is now active"
+    stop: "[OPEN SPRINKLER] {} is now idle" 
 rain: # Rain sensor notifications for active or cleared. Valid options are "yes" or "no"
-  notify: "yes"
+  notify: 
+    active: "yes"
+    clear: "yes"
+    duration: "yes"
   messages:
-    active: "Rain sensor has detected rain"
-    clear: "Rain sensor has cleared"
+    active: "[OPEN SPRINKLER] Rain sensor has detected rain"
+    clear: "[OPEN SPRINKLER] Rain sensor has cleared"
+    duration: "[OPEN SPRINKLER] Yesterday's rain duration is {}"
 waterlevel: # Water level notifications? Valid options are "yes" or "no"
   notify: "yes"
-  message: "The water level is now {}%"
+  message: "[OPEN SPRINKLER] The water level is now {}%"
 push:
-  service: "instapush" # Acceptable options are "instapush" or "pushover" or "ifttt"
+  service: "jeedom" # Acceptable options are "instapush" or "pushover" or "ifttt" or "jeedom"
   instapush:
     appID: "YOUR_INSTAPUSH_APPID"
     appSecret: "YOUR_INSTAPUSH_APPSECRET"
@@ -35,6 +39,14 @@ push:
   ifttt:
     eventName: "YOUR_IFTTT_EVENT_NAME"
     userKey: "YOUR_IFTTT_USER_KEY"
+  jeedom:
+    jeedomIP: "YOUR_JEEDOM_IP_ADDRESS"
+    jeedomDIY: ""
+    jeedomApiKey: "YOUR_JEEDOM_API_KEY"
+    jeedomStationsIDs: [101, 102, 103, 104] # Replace with your Jeedom stations virtuals IDs
+    jeedomRainSensorId: 110 # Replace with your Jeedom rain sensor virtual ID
+    jeedomRainDurationId: 120 # Replace with your Jeedom rain duration virtual ID
+    jeedomWaterLevelId: 130 # Replace with your Jeedom water level virtual ID
 email:
   from: "you@yourdomain.com"
   to: "you@yourdomain.com"

@@ -34,8 +34,6 @@
 				- Added some comments and error handling output to help with debugging...etc.
 
     	4/29/2016, Added logmsg() to simplify logging
-    	
-    	6/7/2016, Fixed a waterLevel typo bug. Thanks @nathangraves @ github!
 	"""
 
 import os, syslog, urllib2, json, requests, yaml
@@ -43,6 +41,9 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from time import sleep
+import time
+import datetime
+import threading
 
 # How long to sleep for each iteration of the run loop
 POLL_SLEEP = 10
@@ -102,6 +103,14 @@ else:
 	pushoverSound = "pushover"
 iftttEventName = config["push"]["ifttt"]["eventName"]
 iftttUserKey = config["push"]["ifttt"]["userKey"]
+jeedomIP = config["push"]["jeedom"]["jeedomIP"]
+jeedomDIY = config["push"]["jeedom"]["jeedomDIY"]
+jeedomApiKey = config["push"]["jeedom"]["jeedomApiKey"]
+jeedomStationsIDs = config["push"]["jeedom"]["jeedomStationsIDs"]
+jeedomNbStations = len(jeedomStationsIDs)
+jeedomRainSensorId = config["push"]["jeedom"]["jeedomRainSensorId"]
+jeedomRainDurationId = config["push"]["jeedom"]["jeedomRainDurationId"]
+jeedomWaterLevelId = config["push"]["jeedom"]["jeedomWaterLevelId"]
 fromEmail = config["email"]["from"]
 toEmail = config["email"]["to"]
 smtpServer = config["email"]["server"]
@@ -180,9 +189,9 @@ def getStationStatus():
 		error = "Unable to parse OSPi Station Status JSON Output."
 		logmsg(error)
 		sendEmail(error)
-		
+
 	stations = data["sn"]
-	#print "Getting sprinkler status. Zones defined: %s. Zone data: %s" % (data["nstations"],data["sn"])
+	# print "Getting sprinkler status. Zones defined: %s. Zone data: %s" % (data["nstations"],data["sn"])
 	return stations
 
 # Get the name of the station
@@ -217,7 +226,7 @@ def getRainSensorStatus():
 		logmsg(error)
 		sendEmail(error)
 		
-	if ( enabled["urs"] == 1):
+	if (enabled["urs"] == 1):
 		# Get the rain status
 		try:
 			ospiRainSensorStatus = urllib2.urlopen("http://localhost:" + ospiPort + "/jc?pw=" + ospiApiPasswordHash).read()
@@ -260,22 +269,36 @@ def getWaterLevel():
 # Send Push Notification
 def sendPushNotification(notifyType, notifyInfo):
 	# Change verbiage based on event type
+	value = 0
+	type = 0
 	if (notifyType == "station_active"):
 		stationName = getStationName(notifyInfo)
 		event = config["stations"]["messages"]["start"].format(stationName)
+		type = 1
+		value = 1
 		
 	elif (notifyType == "station_idle"):
 		stationName = getStationName(notifyInfo)
 		event = config["stations"]["messages"]["stop"].format(stationName)
+		type = 1
 		
 	elif (notifyType == "rainSensor_active"):
 		event = config["rain"]["messages"]["active"]
-	
+		type = 2
+		value = 1
+		
 	elif (notifyType == "rainSensor_clear"):
 		event = config["rain"]["messages"]["clear"]
+		type = 2
 		
 	elif (notifyType == "waterLevel"):
 		event = config["waterlevel"]["message"].format(notifyInfo)
+		type = 3
+		value = notifyInfo
+	elif (notifyType == "rainDuration"):
+		event = config["rain"]["messages"]["duration"].format(notifyInfo)
+		type = 4
+		value = notifyInfo
 	else:
 		event = notifyType  # just use the notify type - for simple messaging
 	
@@ -306,6 +329,32 @@ def sendPushNotification(notifyType, notifyInfo):
 		payload = { 'value1': event }
 		ret = requests.post(url, data = payload)
 		logmsg("Notification sent to %s. Message: %s. Return message %s" % (pushService, event, ret))
+		#print ret
+		
+	elif (pushService == "jeedom"):
+		if (type == 1): 
+                        # The list of stations starts at 0. We need to subtract 1 to get the right ID in the list
+                        notifyInfo = notifyInfo - 1
+		        if notifyInfo < jeedomNbStations:
+			      jeedomCmdId = jeedomStationsIDs[notifyInfo]
+		        else:
+			      error = "Unable to send notification as the configured number of stations does not match OSPi information."
+			      logmsg(error)
+			      sendEmail(error)
+			      return
+		elif (type == 2):
+			jeedomCmdId = jeedomRainSensorId
+		elif (type == 3):
+			jeedomCmdId = jeedomWaterLevelId
+		elif (type == 4):
+			jeedomCmdId = jeedomRainDurationId
+		else:
+			logmsg("No notification to be sent to %s." % (pushService))
+			return
+		
+		url =  "http://" + jeedomIP + jeedomDIY + "/core/api/jeeApi.php?apikey=" + jeedomApiKey + "&type=virtual&id=" + str(jeedomCmdId) + "&value=" + str(value)
+		ret = requests.post(url)
+		logmsg("Notification sent to %s. URL: %s. Return message %s" % (pushService, url, ret))
 		#print ret
 		
 #----------------------------------------------------
@@ -413,12 +462,17 @@ class rainSensorStatus(Status):
 
 		Status.__init__(self,  config)
 
-		self.notify = config["rain"]["notify"] == "yes"
+		self.notifyActive = config["rain"]["notify"]["active"] == "yes"
+		self.notifyClear = config["rain"]["notify"]["clear"] == "yes"
+		self.notifyDuration = config["rain"]["notify"]["duration"] == "yes"
 		self.currentRainStatus = 0
+		self.todayRainDuration = 0
+		self.startRainTime = 0
+		self.stopRainTime = 0
 
 	@staticmethod
 	def isEnabled(config):
-		return (config["rain"]["notify"] == "yes")
+		return (config["rain"]["notify"]["active"] == "yes" or config["rain"]["notify"]["clear"] == "yes" or config["rain"]["notify"]["duration"] == "yes")
 
 	def check(self):
 		rainSensor = getRainSensorStatus()
@@ -426,15 +480,49 @@ class rainSensorStatus(Status):
 			return  # No change
 
 		# Do we have rain now?
-		if (rainSensor == 1):
+		if (rainSensor == 1 and self.notifyActive):
 			logmsg("Rain sensor is now active")
 			sendPushNotification("rainSensor_active", 0)
-		else:
+			self.startRainTime = time.time()
+		elif self.notifyClear:
 			# No rain now
 			logmsg("Rain sensor has cleared")
 			sendPushNotification("rainSensor_clear", 0)
+			self.stopRainTime = time.time()
+			self.todayRainDuration = self.todayRainDuration + (self.stopRainTime - self.startRainTime)
+			logmsg("New daily rain duration: %s" % self.todayRainDuration)
 
 		self.currentRainStatus = rainSensor
+		
+	def computeTodayRainDuration(self):
+                logmsg("Compute yesterday's total rain duration")
+
+		# If it currently rains
+		if self.currentRainStatus == 1:
+		    self.stopRainTime = time.time()
+		    self.todayRainDuration = self.todayRainDuration + (self.stopRainTime - self.startRainTime)
+	            self.startRainTime = self.stopRainTime
+			
+		if self.notifyDuration == 1:
+		    logmsg("Rain duration: %s" % self.todayRainDuration)
+		    sendPushNotification("rainDuration", self.todayRainDuration)	
+			
+		self.todayRainDuration = 0
+		logmsg("Rain duration has been cleared")
+
+			
+def dailyRoutine(rainSt):
+       
+       logmsg("Starting the daily routine")
+       while True:
+           now = datetime.datetime.today()
+           future = datetime.datetime(now.year, now.month, now.day, 1, 0)
+           if (now.hour >= 1):
+	        future += datetime.timedelta(days=1)
+           logmsg("Sleep for %s seconds" % (future - now).total_seconds())
+           time.sleep((future - now).total_seconds())
+
+           rainSt.computeTodayRainDuration()
 
 #----------------------------------------------------
 # Water Level status check logic
@@ -457,37 +545,47 @@ class waterLevelStatus(Status):
 		if (self.currentWaterLevel != waterLevel):
 			# New water level detected
 			self.currentWaterLevel = waterLevel
-			logmsg("Water level has changed to: %s" % waterLevel)
-			sendPushNotification("waterLevel", waterLevel)
+			logmsg("Water level has changed to: %s" % self.currentWaterLevel)
+			sendPushNotification("waterLevel", self.currentWaterLevel)
 
 #----------------------------------------------------
 # Main loop to check the status and send notification if necessary	
 def main():
-	logmsg('OSPi push notification script started.')
+        now = datetime.datetime.today()
+	logmsg('OSPi push notification script started: %s' % now)
 	
 	# What checks do we need to make in the processing loop?
+        stationSt = stationStatus(config)
+        progSt = programStatus(config)
+        rainSt = rainSensorStatus(config)
+        waterSt = waterLevelStatus(config)
 	statusChecks = []
-	if stationStatus.isEnabled(config):
-		statusChecks.append(stationStatus(config))
+	if stationSt.isEnabled(config):
+                logmsg("Station status monitoring enabled")
+		statusChecks.append(stationSt)
 
-	if programStatus.isEnabled(config):
-		statusChecks.append(programStatus(config))
+	if progSt.isEnabled(config):
+                logmsg("Program status monitoring enabled")
+		statusChecks.append(progSt)
 
-	if rainSensorStatus.isEnabled(config):
-		statusChecks.append(rainSensorStatus(config))
+	if rainSt.isEnabled(config):
+                logmsg("Rain status monitoring enabled")
+		t = threading.Thread(target=dailyRoutine, args=(rainSt,))
+                t.start()
+		statusChecks.append(rainSt)
 
-	if waterLevelStatus.isEnabled(config):
-		statusChecks.append(waterLevelStatus(config))
+	if waterSt.isEnabled(config):
+                logmsg("Water level status monitoring enabled")
+		statusChecks.append(waterSt)
 
 	# if we have no checks, bail
 	if len(statusChecks) == 0:
 		logmsg("No status checks specified in the config file. Exiting.")
 		return
-
+	
 	# Start the run loop
 	try:
 		while True:
-
 			for activity in statusChecks:
 				activity.check()
 
