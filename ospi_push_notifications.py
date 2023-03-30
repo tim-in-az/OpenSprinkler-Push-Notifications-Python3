@@ -106,6 +106,7 @@ iftttUserKey = config["push"]["ifttt"]["userKey"]
 jeedomIP = config["push"]["jeedom"]["jeedomIP"]
 jeedomDIY = config["push"]["jeedom"]["jeedomDIY"]
 jeedomApiKey = config["push"]["jeedom"]["jeedomApiKey"]
+jeedomPluginKey = config["push"]["jeedom"]["jeedomPluginKey"]
 jeedomStationsIDs = config["push"]["jeedom"]["jeedomStationsIDs"]
 jeedomNbStations = len(jeedomStationsIDs)
 jeedomRainSensorId = config["push"]["jeedom"]["jeedomRainSensorId"]
@@ -352,7 +353,7 @@ def sendPushNotification(notifyType, notifyInfo):
 			logmsg("No notification to be sent to %s." % (pushService))
 			return
 		
-		url =  "http://" + jeedomIP + jeedomDIY + "/core/api/jeeApi.php?apikey=" + jeedomApiKey + "&type=virtual&id=" + str(jeedomCmdId) + "&value=" + str(value)
+		url =  "http://" + jeedomIP + jeedomDIY + "/core/api/jeeApi.php?apikey=" + jeedomPluginKey + "&plugin=virtual&type=event&id=" + str(jeedomCmdId) + "&value=" + str(value)
 		ret = requests.post(url)
 		logmsg("Notification sent to %s. URL: %s. Return message %s" % (pushService, url, ret))
 		#print ret
