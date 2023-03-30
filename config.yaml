@@ -43,6 +43,7 @@ push:
     jeedomIP: "YOUR_JEEDOM_IP_ADDRESS"
     jeedomDIY: ""
     jeedomApiKey: "YOUR_JEEDOM_API_KEY"
+    jeedomApiKey: "YOUR_JEEDOM_PLUGIN_KEY"
     jeedomStationsIDs: [101, 102, 103, 104] # Replace with your Jeedom stations virtuals IDs
     jeedomRainSensorId: 110 # Replace with your Jeedom rain sensor virtual ID
     jeedomRainDurationId: 120 # Replace with your Jeedom rain duration virtual ID
