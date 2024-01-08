@@ -36,6 +36,7 @@
         4/29/2016, Added logmsg() to simplify logging
         01/02/2023 TDL Changes for compatibility with python3
                 - change to urllib3 required changes to API calls.
+                - change to Rain Sensor status, was 'rs' now 'sn1' due to API version update
                 - TODO: fix rain sensor threading
                 -
     """
@@ -133,6 +134,7 @@ def getProgramStatus():
         url="http://localhost:" + ospiPort + "/jc?pw=" + ospiApiPasswordHash
         ospiProgramStatus = http.request("GET", url)
         #print(ospiProgramStatus.data)
+        logmsg(ospiProgramStatus.data)
     except:
         error = "Unable to load the OSPi API URL for Program Status You might have a bad hashed password or the OSPi is not online."
         logmsg(error)
@@ -162,8 +164,9 @@ def getProgramName(pid):
     else:
         # get the available programs from the system
         try:
-            url="http://localhost:" + ospiPort + "/jw?pw=" + ospiApiPasswordHash
+            url="http://localhost:" + ospiPort + "/jp?pw=" + ospiApiPasswordHash
             progsDatas = http.request("GET", url)
+            logmsg(progsDatas.data) 
 
         except:
             error = "Unable to load the OSPi API URL for Program Names."
@@ -172,7 +175,7 @@ def getProgramName(pid):
             return "Uknown"
         
         try:
-            progs = json.loads(progsData.data)
+            progs = json.loads(progsDatas.data)
         except:
             error = "Unable to parse OSPi Program Data JSON Output."
             logmsg(error)
@@ -190,6 +193,7 @@ def getStationStatus():
     try:
         url="http://localhost:" + ospiPort + "/js?pw=" + ospiApiPasswordHash
         ospiStationStatus = http.request("GET", url)
+        logmsg(ospiStationStatus.data)
         #print(ospiStationStatus.data)
 
     except:
@@ -261,14 +265,14 @@ def getRainSensorStatus():
             logmsg(error)
             sendEmail(error)
             
-        rainSensor = data["rs"]
+        rainSensor = data["sn1"] # API change 'rs' to 'sn1'
         return rainSensor
     
 
 # Get the watering level
 def getWaterLevel():
     try:
-        url="http://localhost:" + ospiPort + "/jw?pw=" + ospiApiPasswordHash
+        url="http://localhost:" + ospiPort + "/jo?pw=" + ospiApiPasswordHash
         ospiWaterLevel = http.request("GET", url)
 
     except:
