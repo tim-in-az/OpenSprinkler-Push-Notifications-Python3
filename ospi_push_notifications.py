@@ -38,7 +38,7 @@
                 - change to urllib3 required changes to API calls.
                 - change to Rain Sensor status, was 'rs' now 'sn1' due to API version update
                 - TODO: fix rain sensor threading
-                -
+                - Change 'jw' API call to 'jo' to be API compatible
     """
 
 import os, syslog, urllib3, json, requests, yaml
@@ -133,8 +133,6 @@ def getProgramStatus():
     try:
         url="http://localhost:" + ospiPort + "/jc?pw=" + ospiApiPasswordHash
         ospiProgramStatus = http.request("GET", url)
-        #print(ospiProgramStatus.data)
-        logmsg(ospiProgramStatus.data)
     except:
         error = "Unable to load the OSPi API URL for Program Status You might have a bad hashed password or the OSPi is not online."
         logmsg(error)
@@ -166,7 +164,6 @@ def getProgramName(pid):
         try:
             url="http://localhost:" + ospiPort + "/jp?pw=" + ospiApiPasswordHash
             progsDatas = http.request("GET", url)
-            logmsg(progsDatas.data) 
 
         except:
             error = "Unable to load the OSPi API URL for Program Names."
@@ -193,8 +190,6 @@ def getStationStatus():
     try:
         url="http://localhost:" + ospiPort + "/js?pw=" + ospiApiPasswordHash
         ospiStationStatus = http.request("GET", url)
-        logmsg(ospiStationStatus.data)
-        #print(ospiStationStatus.data)
 
     except:
         error = "Unable to load the OSPi API URL for Station Status. You might have a bad hashed password or the OSPi is not online."
